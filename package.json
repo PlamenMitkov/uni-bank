@@ -1,0 +1,24 @@
+{
+  "name": "uni-bank",
+  "version": "1.0.0",
+  "description": "A simple educational banking smart contract for learning about deposits, withdrawals, interest rates, role-based access control, and reserve management.",
+  "main": "index.js",
+  "scripts": {
+    "test": "hardhat test",
+    "test:verbose": "hardhat test --verbose",
+    "compile": "hardhat compile",
+    "clean": "hardhat clean"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.1.0",
+    "@nomicfoundation/hardhat-ethers": "^3.1.2",
+    "@nomicfoundation/hardhat-network-helpers": "^1.1.2",
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
+    "chai": "^4.5.0",
+    "ethers": "^6.15.0",
+    "hardhat": "^2.19.5"
+  }
+}

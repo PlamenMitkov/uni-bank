@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+artifacts/
+cache/
+typechain/
+typechain-types/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Hardhat
+coverage/
+coverage.json
+
+# Misc
+*.swp
+*.swo
+*~
+
+# Tokens
+token.txt
+
+# Python
+__pycache__/
+**/__pycache__/
