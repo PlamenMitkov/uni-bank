@@ -2,22 +2,6 @@
 
 A simple educational banking smart contract for learning about deposits, withdrawals, interest rates, role-based access control, and reserve management.
 
-## Features Implemented
-
-### Requirements 10-18 ✅
-
-- ✅ **Requirement 10**: Ready for deployment in Remix VM (Prague) 
-- ✅ **Requirement 11**: Basic deposit and withdrawal functionality
-- ✅ **Requirement 12**: Reserve management by contract owner
-- ✅ **Requirement 13**: Interest rate setting (per minute, owner only initially)
-- ✅ **Requirement 14**: Interest rate snapshot stored with each deposit
-- ✅ **Requirement 15**: Interest calculation and payout on withdrawal
-- ✅ **Requirement 16**: Administrator role with permissions to:
-  - Add and delete users
-  - Change interest rate for NEW deposits
-- ✅ **Requirement 17**: User whitelist management (owner or admin)
-- ✅ **Requirement 18**: Owner can revoke administrator rights
-
 ## Key Concepts
 
 ### Interest Rate System
