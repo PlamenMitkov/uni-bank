@@ -39,6 +39,10 @@ contract UniBank {
     // Deposit history for each user (each user can have multiple deposits)
     mapping(address => DepositHistory[]) private deposits;
     
+    // Ownership transfer variables
+    address public potentialNewOwner;      // Address that can purchase ownership
+    uint256 public ownershipPrice;         // Price to purchase ownership (0 = not for sale)
+    
     /**
      * @notice Structure to hold information about each deposit
      */
@@ -64,6 +68,9 @@ contract UniBank {
     event UserRemoved(address indexed account);
     event DepositMade(address indexed account, uint256 indexed depositIndex, uint256 amount, uint256 rateBP, uint256 timestamp);
     event WithdrawalMade(address indexed account, uint256 indexed depositIndex, uint256 principal, uint256 interest, uint256 timestamp);
+    event OwnershipOffered(address indexed potentialNewOwner, uint256 price);
+    event OwnershipOfferCancelled();
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner, uint256 price);
     
     // ============================================
     // MODIFIERS
@@ -168,6 +175,56 @@ contract UniBank {
         require(admins[account], "Not an admin.");
         admins[account] = false;
         emit AdminRevoked(account);
+    }
+    
+    /**
+     * @notice Offer ownership transfer to a specific address for a price
+     * @param newOwner Address that will be able to purchase ownership
+     * @param price Price in wei that the new owner must pay
+     * @dev Set price to 0 and newOwner to address(0) to cancel the offer
+     */
+    function offerOwnership(address newOwner, uint256 price) external onlyOwner {
+        require(newOwner != owner, "Cannot offer to current owner.");
+        
+        if (newOwner == address(0) && price == 0) {
+            // Cancel the offer
+            potentialNewOwner = address(0);
+            ownershipPrice = 0;
+            emit OwnershipOfferCancelled();
+        } else {
+            require(newOwner != address(0), "Invalid new owner address.");
+            require(price > 0, "Price must be greater than zero.");
+            potentialNewOwner = newOwner;
+            ownershipPrice = price;
+            emit OwnershipOffered(newOwner, price);
+        }
+    }
+    
+    /**
+     * @notice Purchase ownership of the contract by paying the set price
+     * @dev Only the potential new owner can call this
+     * Payment is sent to the previous owner
+     */
+    function purchaseOwnership() external payable {
+        require(msg.sender == potentialNewOwner, "Only the offered address can purchase ownership.");
+        require(ownershipPrice > 0, "Ownership is not for sale.");
+        require(msg.value == ownershipPrice, "Incorrect payment amount.");
+        
+        address previousOwner = owner;
+        uint256 price = ownershipPrice;
+        
+        // Transfer ownership
+        owner = msg.sender;
+        
+        // Clear the offer
+        potentialNewOwner = address(0);
+        ownershipPrice = 0;
+        
+        // Pay the previous owner
+        (bool success, ) = payable(previousOwner).call{value: price}("");
+        require(success, "Payment to previous owner failed.");
+        
+        emit OwnershipTransferred(previousOwner, msg.sender, price);
     }
     
     // ============================================
@@ -357,6 +414,20 @@ contract UniBank {
             userDeposit.interestRateBPAtDeposit,
             elapsedMinutes
         );
+    }
+    
+    /**
+     * @notice Get the current ownership offer details
+     * @return isForSale True if ownership is currently offered for sale
+     * @return offeredTo Address that can purchase ownership (address(0) if not for sale)
+     * @return price Price in wei to purchase ownership (0 if not for sale)
+     */
+    function getOwnershipOffer() external view returns (bool isForSale, address offeredTo, uint256 price) {
+        if (ownershipPrice > 0 && potentialNewOwner != address(0)) {
+            return (true, potentialNewOwner, ownershipPrice);
+        } else {
+            return (false, address(0), 0);
+        }
     }
     
     // ============================================

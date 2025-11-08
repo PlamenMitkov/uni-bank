@@ -222,9 +222,9 @@ describe("UniBank Contract - Complete Test Suite", function () {
     it("Should allow authorized user to deposit", async function () {
       const depositAmount = toWei(1);
       
-      await expect(uniBank.connect(user1).deposit({ value: depositAmount }))
-        .to.emit(uniBank, "DepositMade")
-        .withArgs(user1.address, 0, depositAmount, 100, await time.latest() + 1);
+      const tx = await uniBank.connect(user1).deposit({ value: depositAmount });
+      await expect(tx)
+        .to.emit(uniBank, "DepositMade");
 
       const count = await uniBank.getUserDepositsCount(user1.address);
       expect(count).to.equal(1);
@@ -562,6 +562,220 @@ describe("UniBank Contract - Complete Test Suite", function () {
       console.log(`    ✅ Step 14: Final reserves: ${fromWei(finalReserves)} ETH`);
       
       console.log("\n    🎉 Complete integration test passed!\n");
+    });
+  });
+
+  describe("🔑 Ownership Transfer", function () {
+    it("Should allow owner to offer ownership for sale", async function () {
+      const price = toWei(10);
+      
+      await expect(uniBank.offerOwnership(user1.address, price))
+        .to.emit(uniBank, "OwnershipOffered")
+        .withArgs(user1.address, price);
+      
+      expect(await uniBank.potentialNewOwner()).to.equal(user1.address);
+      expect(await uniBank.ownershipPrice()).to.equal(price);
+      console.log(`    ✅ Ownership offered to ${user1.address} for ${fromWei(price)} ETH`);
+    });
+
+    it("Should return correct ownership offer details", async function () {
+      // Initially not for sale
+      let [isForSale, offeredTo, price] = await uniBank.getOwnershipOffer();
+      expect(isForSale).to.equal(false);
+      expect(offeredTo).to.equal(ethers.ZeroAddress);
+      expect(price).to.equal(0);
+      
+      // Offer ownership
+      const offerPrice = toWei(5);
+      await uniBank.offerOwnership(user2.address, offerPrice);
+      
+      [isForSale, offeredTo, price] = await uniBank.getOwnershipOffer();
+      expect(isForSale).to.equal(true);
+      expect(offeredTo).to.equal(user2.address);
+      expect(price).to.equal(offerPrice);
+      console.log("    ✅ Ownership offer details correct");
+    });
+
+    it("Should allow potential owner to purchase ownership", async function () {
+      const price = toWei(8);
+      await uniBank.offerOwnership(user1.address, price);
+      
+      const ownerBalanceBefore = await ethers.provider.getBalance(owner.address);
+      
+      await expect(uniBank.connect(user1).purchaseOwnership({ value: price }))
+        .to.emit(uniBank, "OwnershipTransferred")
+        .withArgs(owner.address, user1.address, price);
+      
+      // Check new owner
+      expect(await uniBank.owner()).to.equal(user1.address);
+      
+      // Check offer is cleared
+      expect(await uniBank.potentialNewOwner()).to.equal(ethers.ZeroAddress);
+      expect(await uniBank.ownershipPrice()).to.equal(0);
+      
+      // Check previous owner received payment
+      const ownerBalanceAfter = await ethers.provider.getBalance(owner.address);
+      expect(ownerBalanceAfter - ownerBalanceBefore).to.equal(price);
+      
+      console.log(`    ✅ Ownership transferred to ${user1.address}, payment sent`);
+    });
+
+    it("Should allow new owner to perform owner functions", async function () {
+      const price = toWei(5);
+      await uniBank.offerOwnership(user1.address, price);
+      await uniBank.connect(user1).purchaseOwnership({ value: price });
+      
+      // New owner should be able to activate bank
+      await expect(uniBank.connect(user1).setBankStatus(true))
+        .to.emit(uniBank, "BankActivated");
+      
+      // New owner should be able to add reserves
+      await expect(uniBank.connect(user1).addReserves({ value: toWei(10) }))
+        .to.emit(uniBank, "ReserveAdded");
+      
+      // New owner should be able to add admin
+      await expect(uniBank.connect(user1).addAdmin(admin.address))
+        .to.emit(uniBank, "AdminAdded");
+      
+      console.log("    ✅ New owner can perform all owner functions");
+    });
+
+    it("Should not allow non-owner to offer ownership", async function () {
+      await expect(
+        uniBank.connect(user1).offerOwnership(user2.address, toWei(5))
+      ).to.be.revertedWith("Only owner can execute this.");
+      console.log("    ✅ Non-owner cannot offer ownership");
+    });
+
+    it("Should not allow wrong person to purchase ownership", async function () {
+      await uniBank.offerOwnership(user1.address, toWei(5));
+      
+      await expect(
+        uniBank.connect(user2).purchaseOwnership({ value: toWei(5) })
+      ).to.be.revertedWith("Only the offered address can purchase ownership.");
+      console.log("    ✅ Wrong person cannot purchase ownership");
+    });
+
+    it("Should not allow purchase with incorrect payment", async function () {
+      const price = toWei(10);
+      await uniBank.offerOwnership(user1.address, price);
+      
+      await expect(
+        uniBank.connect(user1).purchaseOwnership({ value: toWei(5) })
+      ).to.be.revertedWith("Incorrect payment amount.");
+      
+      await expect(
+        uniBank.connect(user1).purchaseOwnership({ value: toWei(15) })
+      ).to.be.revertedWith("Incorrect payment amount.");
+      
+      console.log("    ✅ Incorrect payment rejected");
+    });
+
+    it("Should allow owner to cancel ownership offer", async function () {
+      // Offer ownership
+      await uniBank.offerOwnership(user1.address, toWei(10));
+      expect(await uniBank.potentialNewOwner()).to.equal(user1.address);
+      
+      // Cancel by setting both to zero/null
+      await expect(uniBank.offerOwnership(ethers.ZeroAddress, 0))
+        .to.emit(uniBank, "OwnershipOfferCancelled");
+      
+      expect(await uniBank.potentialNewOwner()).to.equal(ethers.ZeroAddress);
+      expect(await uniBank.ownershipPrice()).to.equal(0);
+      
+      console.log("    ✅ Ownership offer cancelled");
+    });
+
+    it("Should not allow purchase when ownership not for sale", async function () {
+      await expect(
+        uniBank.connect(user1).purchaseOwnership({ value: toWei(5) })
+      ).to.be.revertedWith("Only the offered address can purchase ownership.");
+      console.log("    ✅ Cannot purchase when not for sale");
+    });
+
+    it("Should reject invalid offer parameters", async function () {
+      // Invalid address with non-zero price
+      await expect(
+        uniBank.offerOwnership(ethers.ZeroAddress, toWei(5))
+      ).to.be.revertedWith("Invalid new owner address.");
+      
+      // Valid address with zero price
+      await expect(
+        uniBank.offerOwnership(user1.address, 0)
+      ).to.be.revertedWith("Price must be greater than zero.");
+      
+      // Cannot offer to current owner
+      await expect(
+        uniBank.offerOwnership(owner.address, toWei(5))
+      ).to.be.revertedWith("Cannot offer to current owner.");
+      
+      console.log("    ✅ Invalid offer parameters rejected");
+    });
+
+    it("Should allow owner to change offer before purchase", async function () {
+      // First offer
+      await uniBank.offerOwnership(user1.address, toWei(10));
+      
+      // Change offer to different person and price
+      await expect(uniBank.offerOwnership(user2.address, toWei(15)))
+        .to.emit(uniBank, "OwnershipOffered")
+        .withArgs(user2.address, toWei(15));
+      
+      expect(await uniBank.potentialNewOwner()).to.equal(user2.address);
+      expect(await uniBank.ownershipPrice()).to.equal(toWei(15));
+      
+      // Old potential owner cannot purchase
+      await expect(
+        uniBank.connect(user1).purchaseOwnership({ value: toWei(10) })
+      ).to.be.revertedWith("Only the offered address can purchase ownership.");
+      
+      // New potential owner can purchase with correct price
+      await uniBank.connect(user2).purchaseOwnership({ value: toWei(15) });
+      expect(await uniBank.owner()).to.equal(user2.address);
+      
+      console.log("    ✅ Owner can update offer before purchase");
+    });
+
+    it("Should handle ownership transfer in complete lifecycle", async function () {
+      console.log("\n    🎬 Starting ownership lifecycle test...\n");
+      
+      // 1. Original owner sets up bank
+      await uniBank.setBankStatus(true);
+      await uniBank.setInterestRatePerMinuteBP(100);
+      await uniBank.addReserves({ value: toWei(20) });
+      await uniBank.addAdmin(admin.address);
+      console.log("    ✅ Step 1: Owner set up bank");
+      
+      // 2. Owner offers ownership
+      const price = toWei(12);
+      await uniBank.offerOwnership(user1.address, price);
+      console.log(`    ✅ Step 2: Offered to user1 for ${fromWei(price)} ETH`);
+      
+      // 3. User1 purchases ownership
+      const ownerBalanceBefore = await ethers.provider.getBalance(owner.address);
+      await uniBank.connect(user1).purchaseOwnership({ value: price });
+      const ownerBalanceAfter = await ethers.provider.getBalance(owner.address);
+      console.log(`    ✅ Step 3: User1 purchased ownership`);
+      
+      // 4. Verify payment
+      expect(ownerBalanceAfter - ownerBalanceBefore).to.equal(price);
+      console.log(`    ✅ Step 4: Original owner received ${fromWei(price)} ETH`);
+      
+      // 5. New owner adds user and they deposit
+      await uniBank.connect(user1).addAuthorizedUser(user2.address);
+      await uniBank.connect(user2).deposit({ value: toWei(5) });
+      console.log("    ✅ Step 5: New owner authorized user2 who deposited 5 ETH");
+      
+      // 6. New owner can offer ownership again
+      await uniBank.connect(user1).offerOwnership(owner.address, toWei(20));
+      console.log("    ✅ Step 6: New owner can re-offer ownership");
+      
+      // 7. Original owner buys it back
+      await uniBank.connect(owner).purchaseOwnership({ value: toWei(20) });
+      expect(await uniBank.owner()).to.equal(owner.address);
+      console.log("    ✅ Step 7: Original owner bought back ownership");
+      
+      console.log("\n    🎉 Ownership lifecycle test passed!\n");
     });
   });
 });

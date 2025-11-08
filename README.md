@@ -2,6 +2,17 @@
 
 A simple educational banking smart contract for learning about deposits, withdrawals, interest rates, role-based access control, and reserve management.
 
+## ✨ New Feature: Ownership Transfer
+
+**Added functionality for sale and transfer of contract ownership.**
+
+The contract owner can now:
+- Offer ownership to a specific address for a determined price
+- Receive payment when the new owner purchases
+- Transfer full control automatically upon payment
+
+This enables monetization of the owner position and smooth succession planning for the bank contract.
+
 ## Key Concepts
 
 ### Interest Rate System
@@ -220,6 +231,114 @@ Now try to deposit as an authorized user:
 deposit() // Should fail with "Bank is not active."
 ```
 
+## 🔑 NEW FEATURE: Ownership Transfer
+
+### Overview
+The contract now supports **sale and transfer of ownership** for a price set by the current owner. This allows the owner to monetize their position and transfer control of the bank to a new party.
+
+### How It Works
+1. **Current owner** sets a potential new owner address and a sale price
+2. **Potential owner** pays the exact price to purchase ownership
+3. **Payment** is automatically sent to the previous owner
+4. **Ownership** is immediately transferred
+5. **New owner** can perform all owner functions
+
+### Testing Ownership Transfer in Remix VM (Prague)
+
+#### Step 12: Offer Ownership for Sale (As Current Owner)
+
+Assume you want to sell ownership for 10 ETH to account `0x70997970C51812dc3A010C7d01b50e0d17dc79C8`:
+
+```solidity
+offerOwnership(0x70997970C51812dc3A010C7d01b50e0d17dc79C8, 10000000000000000000)
+```
+
+This emits `OwnershipOffered` event with the address and price.
+
+#### Step 13: Check Ownership Offer (Anyone)
+
+Anyone can check if ownership is for sale:
+```solidity
+getOwnershipOffer()
+```
+
+Returns:
+- `isForSale`: `true`
+- `offeredTo`: `0x70997970C51812dc3A010C7d01b50e0d17dc79C8`
+- `price`: `10000000000000000000` (10 ETH in wei)
+
+#### Step 14: Purchase Ownership (As Potential Owner)
+
+Switch to the account `0x70997970C51812dc3A010C7d01b50e0d17dc79C8`:
+
+```solidity
+purchaseOwnership() // Send exactly 10 ETH (10000000000000000000 wei)
+```
+
+This will:
+- Transfer ownership to you
+- Send 10 ETH to the previous owner
+- Emit `OwnershipTransferred` event
+- Clear the ownership offer
+
+Verify new owner:
+```solidity
+owner() // Returns your address
+```
+
+#### Step 15: Verify New Owner Powers
+
+The new owner can now:
+```solidity
+setBankStatus(true) // Works!
+addReserves() // Works!
+addAdmin(0x...) // Works!
+```
+
+#### Optional: Cancel Ownership Offer (As Owner)
+
+If you want to cancel the offer before it's purchased:
+```solidity
+offerOwnership(0x0000000000000000000000000000000000000000, 0)
+```
+
+This emits `OwnershipOfferCancelled` and clears the offer.
+
+### Sample Transaction Scenarios
+
+#### Scenario 1: Simple Ownership Transfer
+1. **Owner** (Account A) offers ownership to Account B for 5 ETH
+   - Call: `offerOwnership(AccountB, 5000000000000000000)`
+2. **Account B** purchases ownership
+   - Call: `purchaseOwnership()` with 5 ETH
+   - Account A receives 5 ETH
+   - Account B becomes the new owner
+3. **Account B** can now manage the bank
+   - Call: `setBankStatus(true)`, `addReserves()`, etc.
+
+#### Scenario 2: Ownership Offer Update
+1. **Owner** offers to Account B for 10 ETH
+   - Call: `offerOwnership(AccountB, 10000000000000000000)`
+2. **Owner** changes mind, offers to Account C for 15 ETH instead
+   - Call: `offerOwnership(AccountC, 15000000000000000000)`
+3. **Account B** cannot purchase (offer changed)
+4. **Account C** purchases for 15 ETH
+   - Call: `purchaseOwnership()` with 15 ETH
+
+#### Scenario 3: Ownership Re-sale
+1. **Owner A** sells to **Owner B** for 10 ETH
+2. **Owner B** runs the bank for a while, adds value
+3. **Owner B** offers to **Owner A** (or anyone) for 20 ETH
+4. **Owner A** (or new buyer) purchases back ownership
+
+### Security Features
+- ✅ Only the exact offered address can purchase
+- ✅ Exact payment amount required (no more, no less)
+- ✅ Payment goes directly to previous owner
+- ✅ Ownership cannot be offered to current owner
+- ✅ Owner can cancel or update offer anytime before purchase
+- ✅ All transfers emit events for transparency
+
 ## Interest Calculation Example
 
 ### Example 1: 1 ETH at 1% per minute for 5 minutes
@@ -247,6 +366,8 @@ deposit() // Should fail with "Bank is not active."
 - `addReserves()` - Add ETH reserves to cover interest (payable)
 - `addAdmin(address)` - Grant admin rights
 - `revokeAdmin(address)` - Revoke admin rights
+- `offerOwnership(address, uint256)` - Offer ownership for sale to specific address at set price
+- `purchaseOwnership()` - Purchase ownership (payable, only potential owner)
 
 ### Owner or Admin Functions
 - `setInterestRatePerMinuteBP(uint256)` - Set interest rate for NEW deposits
@@ -263,6 +384,7 @@ deposit() // Should fail with "Bank is not active."
 - `getUserDepositsCount(address)` - Get number of deposits for a user
 - `getDeposit(address, uint256)` - Get deposit details
 - `previewInterest(address, uint256)` - Preview current interest for a deposit
+- `getOwnershipOffer()` - Get current ownership offer details (isForSale, offeredTo, price)
 
 ## Security Features
 
